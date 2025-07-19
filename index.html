@@ -145,11 +145,31 @@
             padding-left: 0.5rem;
             padding-right: 0.5rem;
         }
+
+        .theme-toggle {
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            width: auto;
+        }
+
+        .theme-toggle button {
+            background-color: transparent;
+            border: none;
+        }
+
+        .theme-toggle button>.icon::after {
+            content: "🌙";
+            font-size: 1.5rem;
+        }
+
+        html.dark .theme-toggle button>.icon::after {
+            content: "☀️";
+        }
     </style>
 
     <style>
         /* Dark mode styles */
-
         html.dark body {
             background-color: #202020;
             color: #f0f0f0;
@@ -205,6 +225,7 @@
             border-bottom: 1px solid #5a5a5a;
         }
     </style>
+
     <script>
         "use strict";
 
@@ -221,7 +242,7 @@
                     window.localStorage.setItem("theme", theme);
                 }
             };
-            
+
             // has stored theme preference?
             let theme = "light";
             const lsTheme = window.localStorage.getItem("theme");
@@ -239,6 +260,13 @@
 </head>
 
 <body>
+    <div class="theme-toggle">
+        <button
+            onclick="window.setPageTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark', true)">
+            <span class="icon"></span>
+        </button>
+    </div>
+
     <h1 class="title">M365 Domain Config Check</h1>
     <p class="tagline">A tool to quickly verify if a Domain is set up for use with M365 Services </p>
 
