@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>M365 Domain Config Check</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        body>* {
+            width: 70%;
+        }
+
+        #results-container {
+            /* hack: ensure results-container is a bit larger so that child cards display at correct width */
+            width: calc(70% + 40px)
+        }
+
+        .title {
+            color: #333;
+            text-align: center;
+            margin-bottom: 0;
+        }
+
+        .tagline {
+            color: #666;
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin: 5px 0;
+        }
+
+        .card>h2,
+        .card>summary {
+            margin-top: 0;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .card>summary {
+            cursor: pointer;
+        }
+
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .separator {
+            margin-left: 10px;
+            margin-right: 10px;
+            color: gray;
+            user-select: none;
+        }
+
+        .value-container {
+            width: fit-content;
+            display: flex;
+            align-items: center;
+            border: 1px solid gray;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .value-container:focus-within {
+            outline: 1px solid blue;
+        }
+
+        .value-container:has(.invalid) {
+            outline: 1px solid red !important;
+        }
+
+        .value-container>input {
+            flex: 1 1 auto;
+            margin: 0;
+            padding: 10px;
+            border: none;
+        }
+
+        .value-container>input[type="number"] {
+            appearance: textfield;
+        }
+
+        .value-container>input:focus {
+            outline: none;
+        }
+
+        .value-container>label {
+            padding: 10px;
+            color: #666;
+        }
+
+        .notice {
+            color: #666;
+        }
+
+        .value-container:has(.result-valid) {
+            outline: 1px solid green;
+        }
+
+        .value-container:has(.result-invalid) {
+            outline: 1px solid red;
+        }
+
+        .details-list {
+            list-style: none;
+        }
+
+        .details-list>li>span>a {
+            color: #007bff;
+            text-decoration: none;
+            font-size: small;
+            vertical-align: super;
+            margin-left: 0.25rem;
+        }
+
+        .vspace {
+            margin-top: 10px;
+        }
+
+        .table {
+            margin: 1rem
+        }
+
+        .table td,
+        .table th {
+            border-bottom: 1px solid #ddd;
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 class="title">M365 Domain Config Check</h1>
+    <p class="tagline">A tool to quickly verify if a Domain is set up for use with M365 Services </p>
+
+    <div class="card">
+        <h2>Check your Domain</h2>
+
+        <div style="display: flex; gap: 10px">
+            <div class="value-container">
+                <label for="domain">Domain:</label>
+                <input type="text" id="domain" placeholder="example.com" />
+            </div>
+            <button id="start-check">Check</button>
+        </div>
+
+        <p class="notice">
+            When you click "Check", the domain you entered will be sent to Cloudflare's DNS over HTTPS service to
+            retrieve the DNS records.
+        </p>
+    </div>
+
+    <div id="results-container" hidden>
+    </div>
+
+    <div class="card">
+        <h2>About</h2>
+        <p>
+            This tool is designed to help you verify the configuration of your domain for use with Microsoft 365
+            services.
+            It checks for common records required for services like Exchange Online, DKIM, DMARC, and more.
+            The checks are based on the official Microsoft documentation and best practices.
+        </p>
+        <a href="https://github.com/shadow578/m365-domain-config-check" target="_blank" , rel="noopener noreferrer">View
+            the source code on GitHub</a>
+    </div>
+
+    <script>
+        "use strict";
+
+        (() => {
+            async function checks(domain) {
+                async function queryDNS(domain, recordType) {
+                    const result = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${encodeURIComponent(recordType)}`, {
+                        method: "GET",
+                        headers: { "Accept": "application/dns-json" }
+                    });
+                    if (!result.ok) {
+                        return [];
+                    }
+
+                    const data = await result.json();
+                    if (!data.Answer || data.Answer.length === 0) {
+                        return [];
+                    }
+
+                    return data.Answer.map(a => {
+                        let value = a.data;
+
+                        if (recordType.toLowerCase() === "txt") {
+                            // txt records are returned quoted, so we need to remove the quotes
+                            if (value.startsWith('"') && value.endsWith('"')) {
+                                value = value.slice(1, -1);
+                            }
+                        }
+
+                        return {
+                            name: a.name,
+                            value,
+                            ttl: a.TTL,
+                        };
+                    });
+                }
+
+                async function checkCommonMicrosoft(domain) {
+                    const verifyMsHelpUrl = "https://learn.microsoft.com/en-us/entra/fundamentals/add-custom-domain";
+
+                    const msVerifyRecord = (await queryDNS(domain, "TXT")).find(record => record.value.includes("MS=ms"));
+
+                    return {
+
+                        type: "container",
+                        style: "card",
+                        title: "Common Microsoft Records",
+                        notice: "These checks are required for any Microsoft 365 service to work properly.",
+                        content: [
+                            {
+                                type: "value",
+                                label: "Microsoft Verification Record",
+                                value: msVerifyRecord?.value || ""
+                            },
+                            {
+                                type: "checklist",
+                                content: [
+                                    {
+                                        title: "Domain is verified",
+                                        hint: "A TXT record with 'MS=ms' is required for Microsoft services",
+                                        url: verifyMsHelpUrl,
+                                        pass: !!msVerifyRecord
+                                    },
+                                ]
+                            }
+                        ]
+                    };
+                }
+
+                async function checkExchangeOnline(domain) {
+                    async function checkMX(domain) {
+                        const msHelpUrl = "https://learn.microsoft.com/en-us/microsoft-365/admin/get-help-with-domains/create-dns-records-at-any-dns-hosting-provider?view=o365-worldwide#add-an-mx-record-for-email-outlook-exchange-online";
+
+                        const result = {
+                            type: "container",
+                            style: "card",
+                            title: "MX Records",
+                            notice: "MX (Mail Exchange) records are DNS records that specify the mail servers responsible for receiving email on behalf of your domain.",
+                            content: []
+                        };
+
+                        const records = await queryDNS(domain, "MX");
+                        if (records.length === 0) {
+                            result.content.push({
+                                type: "checklist",
+                                content: [
+                                    {
+                                        title: "MX configured",
+                                        hint: "configure at least one MX record pointing to Exchange Online",
+                                        url: msHelpUrl,
+                                        pass: false
+                                    }
+                                ]
+                            });
+                            return result;
+                        }
+
+                        result.content = records.map(mx => {
+                            console.log("MX Record: ", mx);
+
+                            const isExchangeOnline = mx.value.includes("mail.protection.outlook.com");
+
+                            return {
+                                type: "container",
+                                style: "none",
+                                content: [
+                                    {
+                                        type: "value",
+                                        label: "MX Record",
+                                        value: mx.value,
+                                        valid: isExchangeOnline
+                                    },
+                                    {
+                                        type: "checklist",
+                                        content: [
+                                            {
+                                                title: "MX points to Exchange Online",
+                                                hint: "MX records should point to '<tenant specific>.mail.protection.outlook.com'",
+                                                url: msHelpUrl,
+                                                pass: isExchangeOnline
+                                            },
+                                            {
+                                                title: "TTL is 1-2 hours",
+                                                hint: "MX records should have a TTL of 1-2 hours (3600-7200 seconds)",
+                                                pass: mx.ttl >= 3600 && mx.ttl <= 7200
+                                            }
+                                        ]
+                                    }
+                                ]
+                            };
+                        });
+
+                        return result;
+                    }
+
+                    async function checkSPF(domain) {
+                        const msHelpUrl = "https://learn.microsoft.com/en-us/microsoft-365/admin/get-help-with-domains/create-dns-records-at-any-dns-hosting-provider?view=o365-worldwide#add-or-edit-an-spf-txt-record-to-help-prevent-email-spam-outlook-exchange-online";
+                        const c2HelpUrl = "https://www.codetwo.com/userguide/email-signatures-for-office-365/spf-records.htm";
+
+                        const result = {
+                            type: "container",
+                            style: "card",
+                            title: "SPF Record",
+                            notice: "SPF (Sender Policy Framework) records are DNS records that specify which mail servers are allowed to send email on behalf of your domain.",
+                            content: []
+                        };
+
+                        const record = (await queryDNS(domain, "TXT")).find(r => r.value.includes("v=spf1"));
+                        if (!record) {
+                            result.content.push({
+                                type: "checklist",
+                                content: [
+                                    {
+                                        title: "SPF configured",
+                                        hint: "configure a TXT record with, for example, 'v=spf1 include:spf.protection.outlook.com -all'",
+                                        url: msHelpUrl,
+                                        pass: false
+                                    }
+                                ]
+                            });
+                            return result;
+                        }
+
+                        function parseSPF(value) {
+                            const spf = {
+                                version: null,
+                                mode: null,
+                                modeName: null,
+                                ipv4: [],
+                                ipv6: [],
+                                includes: [],
+                                allowA: false,
+                                allowMX: false,
+                                valid: true,
+                            };
+
+                            for (const part of value.split(" ")) {
+                                const [key, value] = part.split(/:|=/);
+                                switch (key.toLowerCase()) {
+                                    case "v":
+                                        if (spf.version) {
+                                            console.error("multiple SPF versions defined");
+                                            spf.valid = false;
+                                        }
+                                        spf.version = value.toLowerCase();
+                                        break;
+                                    case "-all":
+                                    case "~all":
+                                    case "?all":
+                                    case "+all":
+                                        if (spf.mode) {
+                                            console.error("multiple SPF modes defined");
+                                            spf.valid = false;
+                                        }
+
+                                        const lookup = {
+                                            "-": "hardfail",
+                                            "~": "softfail",
+                                            "?": "neutral",
+                                            "+": "pass"
+                                        };
+
+                                        spf.mode = key;
+                                        spf.modeName = lookup[key.at(0)] || "unknown";
+                                        break;
+                                    case "a":
+                                        spf.allowA = true;
+                                        break;
+                                    case "mx":
+                                        spf.allowMX = true;
+                                        break;
+                                    case "ip4":
+                                        spf.ipv4.push(value);
+                                        break;
+                                    case "ip6":
+                                        spf.ipv6.push(value);
+                                        break;
+                                    case "include":
+                                        spf.includes.push(value);
+                                        break;
+                                    default:
+                                        throw new Error(`unknown SPF part: ${part}`);
+                                }
+                            }
+
+                            if (!spf.mode) {
+                                spf.mode = "?all";
+                                spf.modeName = "neutral";
+                            }
+
+                            if (spf.version !== "spf1") {
+                                console.error("SPF version is not spf1");
+                                spf.valid = false;
+                            }
+
+                            return spf;
+                        }
+
+                        const spf = parseSPF(record.value);
+
+                        console.log("SPF Record: ", record, spf);
+
+                        const spfModeDescription = {
+                            hardfail: "Emails not matching the SPF record will be rejected.",
+                            softfail: "Emails not matching the SPF record will be accepted but marked as suspicious.",
+                            neutral: "No specific action is taken for emails not matching the SPF record.",
+                            pass: "All emails are allowed, regardless of SPF record.",
+                        };
+
+                        result.content = [
+                            {
+                                type: "value",
+                                label: "SPF Record",
+                                value: record.value,
+                                valid: spf.valid
+                            },
+                            {
+                                type: "container",
+                                title: "Explanation",
+                                style: "none",
+                                foldable: true,
+                                open: false,
+                                content: [
+                                    {
+                                        type: "table",
+                                        header: ["Type", "Value", "Description"],
+                                        rows: [
+                                            ["Version", spf.version, ""],
+                                            ["Mode", `${spf.modeName} (${spf.mode})`, spfModeDescription[spf.modeName] || ""],
+                                            ["A", spf.allowA ? "Yes" : "No", "Allows all A records of the domain to send emails"],
+                                            ["MX", spf.allowMX ? "Yes" : "No", "Allows all MX records of the domain to send emails"],
+                                            ...spf.ipv4.map(ip => ["IPv4", ip, `Allows ${ip} to send emails`]),
+                                            ...spf.ipv6.map(ip => ["IPv6", ip, `Allows ${ip} to send emails`]),
+                                            ...spf.includes.map(include => ["include ", include, `Allows all records defined by ${include} to send emails`])
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                type: "checklist",
+                                content: [
+                                    {
+                                        title: "SPF record is valid",
+                                        hint: "The SPF record must be valid.",
+                                        pass: spf.valid
+                                    },
+                                    {
+                                        title: "SPF permits Exchange Online",
+                                        hint: "SPF records should include 'include:spf.protection.outlook.com'",
+                                        url: msHelpUrl,
+                                        pass: spf.includes.includes("spf.protection.outlook.com")
+                                    },
+                                    {
+                                        title: "SPF permits CodeTwo",
+                                        hint: "SPF records should include 'include:spf-de.emailsignatures365.com' when using CodeTwo Email Signatures for Office 365",
+                                        url: c2HelpUrl,
+                                        pass: spf.includes.includes("spf-de.emailsignatures365.com")
+                                    },
+                                    {
+                                        title: "SPF permits no other IPs",
+                                        hint: "SPF records should not include any 'ip4:' or 'ip6:' entries, unless you have specific IPs that need to be allowed (e.g. local mail server)",
+                                        pass: spf.ipv4.length === 0 && spf.ipv6.length === 0
+                                    },
+                                    {
+                                        title: "Hard Fail is set",
+                                        hint: "SPF records should end with '-all' to indicate a hard fail for any senders not permitted",
+                                        pass: spf.mode === "-all"
+                                    },
+                                    {
+                                        title: "TTL is 1-2 hours",
+                                        hint: "SPF records should have a TTL of 1-2 hours (3600-7200 seconds)",
+                                        pass: record.ttl >= 3600 && record.ttl <= 7200
+                                    }
+                                ]
+                            }
+                        ];
+                        return result;
+                    }
+
+                    async function checkDKIM(domain) {
+                        const msHelpUrl = "https://learn.microsoft.com/en-us/defender-office-365/email-authentication-dkim-configure?view=o365-worldwide";
+
+                        const results = {
+                            type: "container",
+                            style: "card",
+                            title: "DKIM Records",
+                            notice: "DKIM (DomainKeys Identified Mail) records are DNS records that allow the sender to associate a domain name with an email message, thereby vouching for its authenticity.",
+                            content: []
+                        };
+
+                        async function checkDKIMSelector(domain, selector) {
+                            const selectorResult = {
+                                type: "container",
+                                style: "card",
+                                title: `DKIM Selector '${selector}'`,
+                                content: []
+                            };
+
+                            // exchange online uses two CNAME records on selector1 and selector2, pointing to <tenant details>.onmicrosoft.com
+                            const record = (await queryDNS(`${selector}._domainkey.${domain}`, "CNAME")).at(0);
+                            if (!record) {
+                                selectorResult.content.push({
+                                    type: "checklist",
+                                    content: [
+                                        {
+                                            title: "DKIM record configured",
+                                            hint: "follow the instructions for setting up DKIM in Exchange Online. You'll need to create some CNAME records.",
+                                            url: msHelpUrl,
+                                            pass: false
+                                        }
+                                    ]
+                                });
+                                return selectorResult;
+                            }
+
+                            const recordIsMs = record.value.endsWith(".onmicrosoft.com") || record.value.endsWith(".onmicrosoft.com.");
+                            const key = (await queryDNS(record.value, "TXT")).at(0)?.value || "";
+                            const keyValid = key.startsWith("v=DKIM1; k=rsa; p=") && key.length > 30;
+
+                            console.log(`DKIM Record and key for ${selector}: `, record, key);
+
+                            selectorResult.content = [
+                                {
+                                    type: "value",
+                                    label: "DKIM Record",
+                                    value: record.value,
+                                    valid: recordIsMs
+                                },
+                                {
+                                    type: "value",
+                                    label: "DKIM Key",
+                                    value: key,
+                                    valid: keyValid
+                                },
+                                {
+                                    type: "checklist",
+                                    content: [
+                                        {
+                                            title: "Points to Exchange Online",
+                                            hint: "DKIM records should point to '<tenant specific>.onmicrosoft.com'",
+                                            url: msHelpUrl,
+                                            pass: recordIsMs
+                                        },
+                                        {
+                                            title: "DKIM key is valid",
+                                            hint: "The DKIM key must be valid. Since it's managed by Microsoft, you cannot really change this.",
+                                            pass: keyValid
+                                        },
+                                        {
+                                            title: "TTL is 1-2 hours",
+                                            hint: "DKIM records should have a TTL of 1-2 hours (3600-7200 seconds)",
+                                            pass: record.ttl >= 3600 && record.ttl <= 7200
+                                        }
+                                    ]
+                                }
+                            ];
+                            return selectorResult;
+                        }
+
+                        const selectors = ["selector1", "selector2"];
+                        results.content = await Promise.all(selectors.map(selector => checkDKIMSelector(domain, selector)));
+                        return results;
+                    }
+
+                    async function checkDMARC(domain) {
+                        const msHelpUrl = "https://learn.microsoft.com/en-us/defender-office-365/email-authentication-dmarc-configure?view=o365-worldwide";
+
+                        const result = {
+                            type: "container",
+                            style: "card",
+                            title: "DMARC Record",
+                            notice: "DMARC (Domain-based Message Authentication, Reporting & Conformance) records are DNS records that allow domain owners to protect their domain from unauthorized use, such as email spoofing.",
+                            content: []
+                        };
+
+                        const record = (await queryDNS(`_dmarc.${domain}`, "TXT")).at(0);
+                        if (!record) {
+                            result.content.push({
+                                type: "checklist",
+                                content: [
+                                    {
+                                        title: "DMARC configured",
+                                        hint: `configure a TXT record with, for example, 'v=DMARC1; p=reject; rua=mailto:admin@${domain}; aspf=s;'`,
+                                        url: msHelpUrl,
+                                        pass: false
+                                    }
+                                ]
+                            });
+                            return result;
+                        }
+
+                        function parseDMARC(value) {
+                            const dmarc = {
+                                version: null,
+                                policy: null,
+                                aggregatedReportReceiver: null,
+                                forensicReportReceiver: null,
+                                spfAlignment: "r", // relaxed by default
+                                dkimAlignment: "r", // relaxed by default
+                                percentage: 100, // 100% by default
+                                valid: true
+                            };
+
+                            for (const part of value.split(";")) {
+                                const [key, value] = part.split("=").map(s => s.trim());
+                                if (!key || !value) {
+                                    // empty part may be generated due to trailing semicolon
+                                    continue;
+                                }
+
+                                switch (key.toLowerCase()) {
+                                    case "v":
+                                        if (dmarc.version) {
+                                            console.error("multiple DMARC versions defined");
+                                            dmarc.valid = false;
+                                        }
+                                        dmarc.version = value.toLowerCase();
+                                        break;
+                                    case "p":
+                                        if (dmarc.policy) {
+                                            console.error("multiple DMARC policies defined");
+                                            dmarc.valid = false;
+                                        }
+                                        dmarc.policy = value.toLowerCase();
+                                        break;
+                                    case "rua":
+                                        if (dmarc.aggregatedReportReceiver) {
+                                            console.error("multiple rua values defined");
+                                            dmarc.valid = false;
+                                            break;
+                                        }
+
+                                        if (!value.startsWith("mailto:")) {
+                                            console.error("rua value must start with 'mailto:'");
+                                            dmarc.valid = false;
+                                            break;
+                                        }
+
+                                        dmarc.aggregatedReportReceiver = value.slice(7); // remove mailto: prefix
+                                        break;
+                                    case "ruf":
+                                        if (dmarc.forensicReportReceiver) {
+                                            console.error("multiple ruf values defined");
+                                            dmarc.valid = false;
+                                            break;
+                                        }
+
+                                        if (!value.startsWith("mailto:")) {
+                                            console.error("ruf value must start with 'mailto:'");
+                                            dmarc.valid = false;
+                                            break;
+                                        }
+
+                                        dmarc.forensicReportReceiver = value.slice(7); // remove mailto: prefix
+                                        break;
+                                    case "aspf":
+                                        if (value !== "s" && value !== "r") {
+                                            console.error("invalid aspf value");
+                                            dmarc.valid = false;
+                                        }
+                                        dmarc.spfAlignment = value.toLowerCase();
+                                        break;
+                                    case "adkim":
+                                        if (value !== "s" && value !== "r") {
+                                            console.error("invalid adkim value");
+                                            dmarc.valid = false;
+                                        }
+                                        dmarc.dkimAlignment = value.toLowerCase();
+                                        break;
+                                    case "pct":
+                                        const pctValue = parseInt(value, 10);
+                                        if (isNaN(pctValue) || pctValue < 0 || pctValue > 100) {
+                                            console.error("invalid pct value");
+                                            dmarc.valid = false;
+                                        } else {
+                                            dmarc.percentage = pctValue;
+                                        }
+                                        break;
+                                    default:
+                                        throw new Error(`unknown DMARC part: ${part}`);
+                                }
+                            }
+
+                            if (!dmarc.version || !dmarc.policy) {
+                                console.error("DMARC record is missing version or policy");
+                                dmarc.valid = false;
+                            }
+
+                            return dmarc;
+                        }
+
+                        const dmarc = parseDMARC(record.value);
+
+                        console.log("DMARC Record: ", record, dmarc);
+
+                        const policyDescription = {
+                            none: "No specific action is taken for emails that fail DMARC checks",
+                            quarantine: "Emails that fail DMARC checks are marked as spam or quarantined",
+                            reject: "Emails that fail DMARC checks are rejected outright"
+                        };
+
+
+                        result.content = [
+                            {
+                                type: "value",
+                                label: "DMARC Record",
+                                value: record.value,
+                                valid: dmarc.valid
+                            },
+                            {
+                                type: "container",
+                                title: "Explanation",
+                                style: "none",
+                                foldable: true,
+                                open: false,
+                                content: [
+                                    {
+                                        type: "table",
+                                        header: ["Type", "Value", "Description"],
+                                        rows: [
+                                            ["Version", dmarc.version, ""],
+                                            ["Policy", dmarc.policy, policyDescription[dmarc.policy] || ""],
+                                            ["Aggregate Report Receiver", dmarc.aggregatedReportReceiver || "-", dmarc.aggregatedReportReceiver ? `${dmarc.aggregatedReportReceiver} will receive aggregate reports` : "No aggregate reports will be sent"],
+                                            ["Forensic Report Receiver", dmarc.forensicReportReceiver || "-", dmarc.forensicReportReceiver ? `${dmarc.forensicReportReceiver} will receive forensic reports` : "No forensic reports will be sent"],
+                                            ["SPF Alignment", dmarc.spfAlignment, `SPF alignment mode: ${dmarc.spfAlignment === "s" ? "strict" : "relaxed"}`],
+                                            ["DKIM Alignment", dmarc.dkimAlignment, `DKIM alignment mode: ${dmarc.dkimAlignment === "s" ? "strict" : "relaxed"}`],
+                                            ["Percentage", dmarc.percentage, `This policy will be applied to ${dmarc.percentage}% of emails sent from this domain`]
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                type: "checklist",
+                                content: [
+                                    {
+                                        title: "DMARC record is valid",
+                                        hint: "The DMARC record must be valid.",
+                                        url: msHelpUrl,
+                                        pass: dmarc.valid
+                                    },
+                                    {
+                                        title: "DMARC policy is set to 'reject'",
+                                        hint: "DMARC records should include 'p=reject' to reject emails that fail DMARC checks",
+                                        pass: dmarc.policy === "reject"
+                                    },
+                                    {
+                                        title: "DMARC includes reporting",
+                                        hint: "DMARC records should include 'rua=' and 'ruf=' for reporting purposes",
+                                        pass: !!dmarc.aggregatedReportReceiver && !!dmarc.forensicReportReceiver
+                                    },
+                                    {
+                                        title: "Reporting email is valid",
+                                        hint: "The reporting email address in 'rua=' and 'ruf=' should be on the same domain",
+                                        pass: (
+                                            (dmarc.aggregatedReportReceiver?.endsWith(`@${domain}`) || true)
+                                            &&
+                                            (dmarc.forensicReportReceiver?.endsWith(`@${domain}`) || true)
+                                        )
+                                    },
+                                    {
+                                        title: "SPF alignment is set to 'strict'",
+                                        hint: "DMARC records should include 'aspf=s' for strict SPF alignment",
+                                        pass: dmarc.spfAlignment === "s"
+                                    },
+                                    {
+                                        title: "DKIM alignment is set to 'relaxed' (Default)",
+                                        hint: "DMARC records should include 'adkim=r' for relaxed DKIM alignment, or not specify it at all (default is relaxed)",
+                                        pass: dmarc.dkimAlignment === "r"
+                                    },
+                                    {
+                                        title: "Policy is applied to 100% of mail",
+                                        hint: "DMARC records should include 'pct=100' to apply the policy to all mail, or not specify it at all (default is 100%)",
+                                        pass: dmarc.percentage === 100
+                                    },
+                                    {
+                                        title: "TTL is 1-2 hours",
+                                        hint: "DMARC records should have a TTL of 1-2 hours (3600-7200 seconds)",
+                                        pass: record.ttl >= 3600 && record.ttl <= 7200
+                                    }
+                                ]
+                            }
+                        ];
+                        return result;
+                    }
+
+                    async function checkMisc(domain) {
+                        const autodiscoverRecord = (await queryDNS(`autodiscover.${domain}`, "CNAME")).at(0);
+
+                        const oneOf = (v, ...values) => {
+                            return values.some(value => v === value || v === `${value}.`);
+                        };
+
+                        return {
+                            type: "container",
+                            style: "card",
+                            title: "Miscellaneous Checks",
+                            content: [
+                                {
+                                    type: "checklist",
+                                    content: [
+                                        {
+                                            title: "Autodiscover Record",
+                                            hint: "A CNAME record for autodiscover is recommended for Exchange Online",
+                                            pass: !!autodiscoverRecord && oneOf(autodiscoverRecord.value, "autodiscover.outlook.com", "autodiscover-s.outlook.com")
+                                        }
+                                    ]
+                                }
+                            ]
+                        };
+                    }
+
+                    const checks /* Promise<node> */ = [
+                        await checkMX(domain),
+                        await checkSPF(domain),
+                        await checkDKIM(domain),
+                        await checkDMARC(domain),
+                        await checkMisc(domain)
+                    ];
+
+                    return {
+                        type: "container",
+                        style: "card",
+                        title: "Microsoft Exchange Online",
+                        notice: "These checks verify that your domain is properly configured for Microsoft Exchange Online.",
+                        content: await Promise.all(checks)
+                    };
+                }
+
+                async function checkIntune(domain) {
+                    const msHelpUrl = "https://learn.microsoft.com/en-us/intune/intune-service/enrollment/windows-enrollment-create-cname";
+
+                    const enterpriseRegistrationRecord = (await queryDNS(`enterpriseregistration.${domain}`, "CNAME")).at(0);
+                    const enterpriseEnrollmentRecord = (await queryDNS(`enterpriseenrollment.${domain}`, "CNAME")).at(0);
+
+                    const oneOf = (v, ...values) => {
+                        return values.some(value => v === value || v === `${value}.`);
+                    };
+
+                    return {
+                        type: "container",
+                        style: "card",
+                        title: "Microsoft Intune",
+                        notice: "These checks verify that your domain is properly configured for Microsoft Intune.",
+                        content: [
+                            {
+                                type: "checklist",
+                                content: [
+                                    {
+                                        title: "Enterprise Registration Record",
+                                        hint: "A CNAME record for enterprise registration is required for Windows Autopilot and other services",
+                                        url: msHelpUrl,
+                                        pass: !!enterpriseRegistrationRecord && oneOf(enterpriseRegistrationRecord.value, "enterpriseregistration.windows.net", "enterpriseregistration.windows.net.")
+                                    },
+                                    {
+                                        title: "Enterprise Enrollment Record",
+                                        hint: "A CNAME record for enterprise enrollment is required for Windows Autopilot and other services",
+                                        url: msHelpUrl,
+                                        pass: !!enterpriseEnrollmentRecord && oneOf(enterpriseEnrollmentRecord.value, "enterpriseenrollment.manage.microsoft.com", "enterpriseenrollment.manage.microsoft.com.")
+                                    }
+                                ]
+                            }
+                        ]
+                    };
+                }
+
+                const checks /* Promise<node> */ = [
+                    await checkCommonMicrosoft(domain),
+                    await checkExchangeOnline(domain),
+                    await checkIntune(domain)
+                ];
+
+                return await Promise.all(checks);
+            }
+
+            function render(nodes /* nodes[] */, target /* HTMLElement */) {
+                function generateValueNode(node /* { type: "value", label: str, value: str, valid: bool } */) {
+                    if (node.type !== "value") {
+                        throw new Error(`invalid node type for generateValueNode: ${node.type}`);
+                    }
+
+                    const container = document.createElement("div");
+                    container.className = "value-container";
+                    container.style.width = "100%";
+
+                    const uuid = crypto.randomUUID();
+
+                    const label = document.createElement("label");
+                    label.textContent = node.label;
+                    label.htmlFor = uuid;
+                    container.appendChild(label);
+
+                    const value = document.createElement("span");
+                    value.id = uuid;
+                    value.textContent = node.value;
+                    value.className = node.valid ? "result-valid" : "result-invalid";
+                    container.appendChild(value);
+
+                    return container;
+                }
+
+                function generateCheckListNode(node /* { type: "checklist", content: [ { title: str, pass: bool, hint: undefined|str, url: undefined|str } ] } */) {
+                    if (node.type !== "checklist") {
+                        throw new Error(`invalid node type for generateCheckListNode: ${node.type}`);
+                    }
+
+                    function createDetailItem(detail) {
+                        const check = document.createElement("input");
+                        check.type = "checkbox";
+                        check.checked = detail.pass;
+                        check.readOnly = true;
+                        check.disabled = true;
+
+                        const text = document.createElement("span");
+                        text.textContent = detail.title;
+
+                        const li = document.createElement("li");
+                        li.title = detail.hint || "";
+
+                        if (detail.url) {
+                            const link = document.createElement("a");
+                            link.href = detail.url;
+                            link.target = "_blank";
+                            link.rel = "noopener noreferrer";
+                            link.textContent = "🔗";
+                            text.appendChild(link);
+                        }
+
+                        li.appendChild(check);
+                        li.appendChild(text);
+                        return li;
+                    }
+
+                    const container = document.createElement("div");
+
+                    const list = document.createElement("ul");
+                    list.className = "details-list";
+                    container.appendChild(list);
+
+                    node.content.forEach(detail => {
+                        list.appendChild(createDetailItem(detail));
+                    });
+
+                    return container;
+                }
+
+                function generateTableNode(node /* { type: "table", header: undefined|str[n], rows: (str[n])[] } } */) {
+                    if (node.type !== "table") {
+                        throw new Error(`invalid node type for generateTableNode: ${node.type}`);
+                    }
+
+                    const container = document.createElement("div");
+
+                    const table = document.createElement("table");
+                    table.className = "table";
+                    container.appendChild(table);
+
+                    if (node.header) {
+                        const row = document.createElement("tr");
+                        table.appendChild(row);
+
+                        for (const cell of node.header) {
+                            const th = document.createElement("th");
+                            th.textContent = cell;
+                            row.appendChild(th);
+                        }
+                    }
+
+                    for (const row of node.rows) {
+                        const rowElement = document.createElement("tr");
+                        table.appendChild(rowElement);
+
+                        for (const cell of row) {
+                            const td = document.createElement("td");
+                            td.textContent = cell;
+                            rowElement.appendChild(td);
+                        }
+                    }
+
+                    return container;
+                }
+
+                function generateContainerNode(node /* { type: "container", title: str|undefined, notice: str|undefined, style: undefined|"none"|"card"| = "none", foldable: undefined|bool = false, open: undefined|bool = false, content: nodes[] /*/) {
+                    if (node.type !== "container") {
+                        throw new Error(`invalid node type for generateContainerNode: ${node.type}`);
+                    }
+
+                    // cards are always foldable, and by default open
+                    if (node.style === "card" && node.foldable === undefined) {
+                        node.foldable = true;
+                        node.open = true;
+                    }
+
+                    const container = document.createElement(node.foldable ? "details" : "div");
+                    switch (node.style) {
+                        case undefined:
+                        case "none":
+                            container.className = "container";
+                            break;
+                        case "card":
+                            container.className = "card";
+                            break;
+                        default:
+                            throw new Error(`invalid container style: ${node.style}`);
+                    }
+
+                    if (node.foldable) {
+                        container.open = node.open;
+                    }
+
+                    if (node.title) {
+                        let title;
+                        if (node.foldable) {
+                            title = document.createElement("summary");
+                        } else {
+                            title = document.createElement("h2");
+                        }
+
+                        title.textContent = node.title;
+                        container.appendChild(title);
+                    }
+
+                    if (node.notice) {
+                        const notice = document.createElement("p");
+                        notice.className = "notice";
+                        notice.textContent = node.notice;
+                        container.appendChild(notice);
+                    }
+
+                    node.content.forEach(childNode => {
+                        try {
+                            let childElement;
+                            switch (childNode.type) {
+                                case "container":
+                                    childElement = generateContainerNode(childNode);
+                                    break;
+                                case "value":
+                                    childElement = generateValueNode(childNode);
+                                    break;
+                                case "checklist":
+                                    childElement = generateCheckListNode(childNode);
+                                    break;
+                                case "table":
+                                    childElement = generateTableNode(childNode);
+                                    break;
+                                default:
+                                    throw new Error(`invalid node type: ${childNode.type}`);
+                            }
+                            container.appendChild(childElement);
+                        } catch (error) {
+                            if ("render_stack" in error) {
+                                error.render_stack.push(childNode);
+                            } else {
+                                error = {
+                                    cause: error,
+                                    render_stack: [childNode]
+                                };
+                            }
+
+                            throw error;
+                        }
+                    });
+
+                    return container;
+                }
+
+                function generateRenderErrorNode(error /* { cause: unknown|Error, render_stack: node[]} */) {
+                    let errorMessage = "An error occurred while rendering the content.";
+                    if (error.cause instanceof Error) {
+                        errorMessage += `\nError: ${error.cause.message}`;
+                    } else if (typeof error.cause === "string") {
+                        errorMessage += `\nError: ${error.cause}`;
+                    }
+                    errorMessage += "\n\nRender Stack:\n";
+
+                    error.render_stack.forEach((node, index) => {
+                        if ("content" in node) {
+                            delete node.content;
+                        }
+
+                        errorMessage += `  ${index + 1}. ${JSON.stringify(node)}\n`;
+                    });
+
+                    console.error("Rendering error: ", errorMessage, error.cause);
+
+                    const node = document.createElement("pre");
+                    node.className = "card";
+                    node.style.color = "red";
+                    node.textContent = errorMessage;
+
+                    return node;
+                }
+
+                const root = {
+                    type: "container",
+                    style: "none",
+                    content: nodes
+                };
+
+                console.log("render: ", root);
+
+                let renderedRoot;
+                try {
+                    renderedRoot = generateContainerNode(root);
+                } catch (error) {
+                    renderedRoot = generateRenderErrorNode(error);
+                }
+
+                target.childNodes.forEach(node => node.remove());
+                target.appendChild(renderedRoot);
+            }
+
+            function main() {
+                const page = {
+                    query: {
+                        domain: document.getElementById("domain"),
+                        start_check: document.getElementById("start-check"),
+                    },
+                    result_container: document.getElementById("results-container")
+                };
+
+                function validatePageElements(container) {
+                    for (const key in container) {
+                        if (container[key] === null) {
+                            throw new Error(`Element '${key}' not found`);
+                        }
+                    }
+                }
+                validatePageElements(page);
+                validatePageElements(page.query);
+
+                function parseAndCheckDomain(domain) {
+                    if (domain.trim() === "") {
+                        return undefined;
+                    }
+
+                    // also allow e-mail addresses
+                    if (domain.includes("@")) {
+                        domain = domain.split("@").pop();
+                    }
+
+                    try {
+                        const valid = (new URL(`https://${domain}/`)).host === domain;
+                        return valid ? domain : undefined;
+                    } catch (error) {
+                        return undefined;
+                    }
+                }
+
+                function checkDomainInput() {
+                    const valid = !!parseAndCheckDomain(page.query.domain.value.trim());
+
+                    page.query.domain.classList = valid ? "" : "invalid";
+                    page.query.start_check.disabled = !valid;
+                }
+
+                async function runChecks() {
+                    let domain = page.query.domain.value.trim();
+                    domain = parseAndCheckDomain(domain);
+                    if (!domain) {
+                        //alert("Please enter a domain name.");
+                        return;
+                    }
+
+                    // re-apply domain input, since it may have been transformed
+                    page.query.domain.value = domain;
+
+
+                    // run checks and show results
+                    page.query.start_check.disabled = true;
+                    page.result_container.hidden = true;
+
+                    const results = await checks(domain);
+                    render(results, page.result_container);
+
+                    page.result_container.hidden = false;
+                    page.query.start_check.disabled = false;
+                };
+
+                page.query.start_check.onclick = runChecks;
+                page.query.domain.onkeypress = async (e) => {
+                    if (e.key === "Enter") {
+                        await runChecks();
+                    }
+                };
+
+                page.query.domain.onkeyup = checkDomainInput;
+
+                checkDomainInput();
+                page.query.domain.classList = ""; // remove error state on first load
+            }
+            main();
+        })();
+    </script>
+</body>
+
+</html>
