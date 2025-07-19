@@ -149,63 +149,93 @@
 
     <style>
         /* Dark mode styles */
-        @media (prefers-color-scheme: dark) {
-            body {
-                background-color: #202020;
-                color: #f0f0f0;
-            }
 
-            .title {
-                color: inherit;
-            }
+        html.dark body {
+            background-color: #202020;
+            color: #f0f0f0;
+        }
 
-            .tagline {
-                color: #b0b0b0;
-            }
+        html.dark .title {
+            color: inherit;
+        }
 
-            a {
-                color: #1e90ff;
-            }
+        html.dark .tagline {
+            color: #b0b0b0;
+        }
 
-            input {
-                background-color: transparent;
-                color: inherit;
-            }
+        html.dark a {
+            color: #1e90ff;
+        }
 
-            .card {
-                background-color: #303030;
-            }
+        html.dark input {
+            background-color: transparent;
+            color: inherit;
+        }
 
-            .button {
-                background-color: #004691;
-            }
+        html.dark .card {
+            background-color: #303030;
+        }
 
-            .button:disabled {
-                background-color: #113861;
-            }
+        html.dark .button {
+            background-color: #004691;
+        }
 
-            .value-container>label {
-                color: #b0b0b0;
-            }
+        html.dark .button:disabled {
+            background-color: #113861;
+        }
 
-            .notice {
-                color: #b0b0b0;
-            }
+        html.dark .value-container>label {
+            color: #b0b0b0;
+        }
 
-            .value-container:has(.result-valid) {
-                outline: 1px solid rgb(57, 124, 57);
-            }
+        html.dark .notice {
+            color: #b0b0b0;
+        }
 
-            .value-container:has(.result-invalid) {
-                outline: 1px solid rgb(255, 107, 107);
-            }
+        html.dark .value-container:has(.result-valid) {
+            outline: 1px solid rgb(57, 124, 57);
+        }
 
-            .table td,
-            .table th {
-                border-bottom: 1px solid #5a5a5a;
-            }
+        html.dark .value-container:has(.result-invalid) {
+            outline: 1px solid rgb(255, 107, 107);
+        }
+
+        html.dark .table td,
+        html.dark .table th {
+            border-bottom: 1px solid #5a5a5a;
         }
     </style>
+    <script>
+        "use strict";
+
+        (() => {
+            window.setPageTheme = (theme /* "dark" | "light" */, store /* bool */) => {
+                console.log("Setting page theme to: ", theme);
+                if (theme === "dark") {
+                    document.documentElement.classList.add("dark");
+                } else {
+                    document.documentElement.classList.remove("dark");
+                }
+
+                if (store) {
+                    window.localStorage.setItem("theme", theme);
+                }
+            };
+            
+            // has stored theme preference?
+            let theme = "light";
+            const lsTheme = window.localStorage.getItem("theme");
+            if (lsTheme == "dark" || lsTheme == "light") {
+                theme = lsTheme;
+            } else {
+                // check system preference
+                const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+                theme = prefersDark ? "dark" : "light";
+            }
+
+            window.setPageTheme(theme, false);
+        })();
+    </script>
 </head>
 
 <body>
