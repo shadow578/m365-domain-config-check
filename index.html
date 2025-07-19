@@ -70,13 +70,6 @@
             cursor: not-allowed;
         }
 
-        .separator {
-            margin-left: 10px;
-            margin-right: 10px;
-            color: gray;
-            user-select: none;
-        }
-
         .value-container {
             width: fit-content;
             display: flex;
@@ -151,6 +144,66 @@
             border-bottom: 1px solid #ddd;
             padding-left: 0.5rem;
             padding-right: 0.5rem;
+        }
+    </style>
+
+    <style>
+        /* Dark mode styles */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #202020;
+                color: #f0f0f0;
+            }
+
+            .title {
+                color: inherit;
+            }
+
+            .tagline {
+                color: #b0b0b0;
+            }
+
+            a {
+                color: #1e90ff;
+            }
+
+            input {
+                background-color: transparent;
+                color: inherit;
+            }
+
+            .card {
+                background-color: #303030;
+            }
+
+            .button {
+                background-color: #004691;
+            }
+
+            .button:disabled {
+                background-color: #113861;
+            }
+
+            .value-container>label {
+                color: #b0b0b0;
+            }
+
+            .notice {
+                color: #b0b0b0;
+            }
+
+            .value-container:has(.result-valid) {
+                outline: 1px solid rgb(57, 124, 57);
+            }
+
+            .value-container:has(.result-invalid) {
+                outline: 1px solid rgb(255, 107, 107);
+            }
+
+            .table td,
+            .table th {
+                border-bottom: 1px solid #5a5a5a;
+            }
         }
     </style>
 </head>
