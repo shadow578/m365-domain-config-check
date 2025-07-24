@@ -4,6 +4,7 @@
 <head>
     <title>M365 Domain Config Check</title>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/x-icon" href="favicon.ico">
 
     <style>
@@ -17,13 +18,11 @@
             align-items: center;
         }
 
-        body>* {
-            width: 70%;
-        }
-
-        #results-container {
-            /* hack: ensure results-container is a bit larger so that child cards display at correct width */
-            width: calc(70% + 40px)
+        .content-body {
+            margin: 0 auto;
+            padding: 0 0;
+            flex: 1 1 auto;
+            max-width: 70rem;
         }
 
         .title {
@@ -150,7 +149,7 @@
         }
 
         .theme-toggle {
-            position: fixed;
+            position: absolute;
             top: 1rem;
             left: 1rem;
             width: auto;
@@ -270,39 +269,42 @@
         </button>
     </div>
 
-    <h1 class="title">M365 Domain Config Check</h1>
-    <p class="tagline">A tool to quickly verify if a Domain is set up for use with M365 Services </p>
+    <div class="content-body">
+        <h1 class="title">M365 Domain Config Check</h1>
+        <p class="tagline">A tool to quickly verify if a Domain is set up for use with M365 Services </p>
 
-    <div class="card">
-        <h2>Check your Domain</h2>
+        <div class="card">
+            <h2>Check your Domain</h2>
 
-        <div style="display: flex; gap: 10px">
-            <div class="value-container">
-                <label for="domain">Domain:</label>
-                <input type="text" id="domain" placeholder="example.com" />
+            <div style="display: flex; gap: 10px">
+                <div class="value-container">
+                    <label for="domain">Domain:</label>
+                    <input type="text" id="domain" placeholder="example.com" />
+                </div>
+                <button id="start-check">Check</button>
             </div>
-            <button id="start-check">Check</button>
+
+            <p class="notice">
+                When you click "Check", the domain you entered will be sent to Cloudflare's DNS over HTTPS service to
+                retrieve the DNS records.
+            </p>
         </div>
 
-        <p class="notice">
-            When you click "Check", the domain you entered will be sent to Cloudflare's DNS over HTTPS service to
-            retrieve the DNS records.
-        </p>
-    </div>
+        <div id="results-container" hidden>
+        </div>
 
-    <div id="results-container" hidden>
-    </div>
-
-    <div class="card">
-        <h2>About</h2>
-        <p>
-            This tool is designed to help you verify the configuration of your domain for use with Microsoft 365
-            services.
-            It checks for common records required for services like Exchange Online, DKIM, DMARC, and more.
-            The checks are based on the official Microsoft documentation and best practices.
-        </p>
-        <a href="https://github.com/shadow578/m365-domain-config-check" target="_blank" , rel="noopener noreferrer">View
-            the source code on GitHub</a>
+        <div class="card">
+            <h2>About</h2>
+            <p>
+                This tool is designed to help you verify the configuration of your domain for use with Microsoft 365
+                services.
+                It checks for common records required for services like Exchange Online, DKIM, DMARC, and more.
+                The checks are based on the official Microsoft documentation and best practices.
+            </p>
+            <a href="https://github.com/shadow578/m365-domain-config-check" target="_blank" ,
+                rel="noopener noreferrer">View
+                the source code on GitHub</a>
+        </div>
     </div>
 
     <script>
