@@ -22,7 +22,7 @@
             margin: 0 auto;
             padding: 0 0;
             flex: 1 1 auto;
-            max-width: 70rem;
+            max-width: 80rem;
         }
 
         .title {
@@ -1043,6 +1043,8 @@
                     value.id = uuid;
                     value.textContent = node.value;
                     value.className = node.valid ? "result-valid" : "result-invalid";
+                    value.style.wordBreak = "break-word"
+                    value.style.overflow = "hidden";
                     container.appendChild(value);
 
                     return container;
