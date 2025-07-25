@@ -896,7 +896,7 @@
                                     {
                                         title: "DMARC includes reporting",
                                         hint: "DMARC records should include 'rua=' and 'ruf=' for reporting purposes",
-                                        pass: !!dmarc.aggregatedReportReceiver && !!dmarc.forensicReportReceiver
+                                        pass: !!dmarc.aggregatedReportReceiver || !!dmarc.forensicReportReceiver
                                     },
                                     {
                                         title: "Reporting email is valid",
