@@ -1305,6 +1305,19 @@
                     page.query.start_check.disabled = !valid;
                 }
 
+                function setDomainQueryParam(domain)
+                {
+                    const url = new URL(window.location);
+                    url.searchParams.set("domain", domain);
+                    window.history.pushState({}, "", url.toString());
+                }
+
+                function getDomainQueryParam() {
+                    const url = new URL(window.location);
+                    return url.searchParams.get("domain");
+                }
+
+
                 async function runChecks() {
                     let domain = page.query.domain.value.trim();
                     domain = parseAndCheckDomain(domain);
@@ -1316,6 +1329,8 @@
                     // re-apply domain input, since it may have been transformed
                     page.query.domain.value = domain;
 
+                    // save to query param
+                    setDomainQueryParam(domain);
 
                     // run checks and show results
                     page.query.start_check.disabled = true;
@@ -1339,6 +1354,13 @@
 
                 checkDomainInput();
                 page.query.domain.classList = ""; // remove error state on first load
+
+                // load and immediately run checks if domain is set in query param
+                const domainFromQuery = getDomainQueryParam();
+                if (domainFromQuery) {
+                    page.query.domain.value = domainFromQuery;
+                    runChecks();
+                }
             }
             main();
         })();
