@@ -663,7 +663,7 @@
                                 return selectorResult;
                             }
 
-                            const recordIsMs = record.value.endsWith(".onmicrosoft.com") || record.value.endsWith(".onmicrosoft.com.");
+                            const recordIsMs = record.value.endsWith(".onmicrosoft.com") || record.value.endsWith(".onmicrosoft.com.") || record.value.endsWith(".microsoft") || record.value.endsWith(".microsoft.");
                             const key = (await queryDNS(record.value, "TXT")).at(0)?.value || "";
                             const keyValid = key.startsWith("v=DKIM1; k=rsa; p=") && key.length > 30;
 
