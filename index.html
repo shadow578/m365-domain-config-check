@@ -514,18 +514,23 @@
                                         spf.modeName = lookup[key.at(0)] || "unknown";
                                         break;
                                     case "a":
+                                    case "+a":
                                         spf.allowA = true;
                                         break;
                                     case "mx":
+                                    case "+mx":
                                         spf.allowMX = true;
                                         break;
                                     case "ip4":
+                                    case "+ip4":
                                         spf.ipv4.push(value);
                                         break;
                                     case "ip6":
+                                    case "+ip6":
                                         spf.ipv6.push(value);
                                         break;
                                     case "include":
+                                    case "+include":
                                         spf.includes.push(value);
                                         break;
                                     default:
@@ -546,7 +551,31 @@
                             return spf;
                         }
 
-                        const spf = parseSPF(record.value);
+                        let spf;
+                        try {
+                            spf = parseSPF(record.value);
+                        } catch (error) {
+                            console.error("parseSPF failed:", error)
+                            result.content = [
+                                {
+                                    type: "value",
+                                    label: "SPF Record",
+                                    value: record.value,
+                                    valid: false
+                                },
+                                {
+                                    type: "checklist",
+                                    content: [
+                                        {
+                                            title: "SPF record is valid",
+                                            hint: "The SPF record must be valid.",
+                                            pass: false
+                                        },
+                                    ]
+                                }
+                            ]
+                            return result;
+                        }
 
                         console.log("SPF Record: ", record, spf);
 
@@ -839,7 +868,32 @@
                             return dmarc;
                         }
 
-                        const dmarc = parseDMARC(record.value);
+                        let dmarc;
+                        try {
+                            dmarc = parseDMARC(record.value);
+                        } catch (error) {
+                            console.log("parseDMARC failed:", error)
+                            result.content = [
+                                {
+                                    type: "value",
+                                    label: "DMARC Record",
+                                    value: record.value,
+                                    valid: false
+                                },
+                                {
+                                    type: "checklist",
+                                    content: [
+                                        {
+                                            title: "DMARC record is valid",
+                                            hint: "The DMARC record must be valid.",
+                                            url: msHelpUrl,
+                                            pass: false
+                                        }
+                                    ]
+                                }
+                            ];
+                            return result;
+                        }
 
                         console.log("DMARC Record: ", record, dmarc);
 
