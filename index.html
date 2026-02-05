@@ -344,7 +344,7 @@
                     });
                 }
 
-                async function checkCommonMicrosoft(domain) {
+                async function checkEntra(domain) {
                     const verifyMsHelpUrl = "https://learn.microsoft.com/en-us/entra/fundamentals/add-custom-domain";
 
                     const msVerifyRecord = (await queryDNS(domain, "TXT")).find(record => record.value.includes("MS=ms"));
@@ -353,8 +353,8 @@
 
                         type: "container",
                         style: "card",
-                        title: "Common Microsoft Records",
-                        notice: "These checks are required for any Microsoft 365 service to work properly.",
+                        title: "Microsoft Entra ID",
+                        notice: "These checks verify your domain is properly configured for M365 / Entra ID.",
                         content: [
                             {
                                 type: "value",
@@ -1016,8 +1016,8 @@
                     const checks /* Promise<node> */ = [
                         await checkMX(domain),
                         await checkSPF(domain),
-                        await checkDKIM(domain),
                         await checkDMARC(domain),
+                        await checkDKIM(domain),
                         await checkMisc(domain)
                     ];
 
@@ -1068,7 +1068,7 @@
                 }
 
                 const checks /* Promise<node> */ = [
-                    await checkCommonMicrosoft(domain),
+                    await checkEntra(domain),
                     await checkExchangeOnline(domain),
                     await checkIntune(domain)
                 ];
