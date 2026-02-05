@@ -72,6 +72,19 @@
             cursor: not-allowed;
         }
 
+        button.copy-button {
+            background-color: transparent;
+            margin-right: 5px;
+        }
+
+        button.copy-button:hover {
+            background-color: #4b4b4b20;
+        }
+
+        button.copy-button svg {
+            fill: #666;
+        }
+
         .value-container {
             width: fit-content;
             display: flex;
@@ -204,6 +217,14 @@
 
         html.dark .button:disabled {
             background-color: #113861;
+        }
+
+        html.dark button.copy-button:hover {
+            background-color: #a5a5a520;
+        }
+
+        html.dark button.copy-button svg {
+            fill: #b0b0b0;
         }
 
         html.dark .value-container>label {
@@ -1099,7 +1120,27 @@
                     value.className = node.valid ? "result-valid" : "result-invalid";
                     value.style.wordBreak = "break-word"
                     value.style.overflow = "hidden";
+                    value.style.flexGrow = "1";
                     container.appendChild(value);
+
+                    const copyButton = document.createElement("button");
+                    copyButton.className = "copy-button";
+
+                    // content_copy_48dp.svg
+                    copyButton.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" height="1.2em" width="1.2em" viewBox="0 -960 960 960" fill="#1f1f1f">
+                        <path d="M300-200q-24 0-42-18t-18-42v-560q0-24 18-42t42-18h440q24 0 42 18t18 42v560q0 24-18 42t-42 18H300Zm0-60h440v-560H300v560ZM180-80q-24 0-42-18t-18-42v-620h60v620h500v60H180Zm120-180v-560 560Z"/>
+                    </svg>
+                    `;
+
+                    container.appendChild(copyButton);
+
+                    copyButton.onclick = (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+
+                        window.navigator.clipboard.writeText(node.value);
+                    }
 
                     return container;
                 }
