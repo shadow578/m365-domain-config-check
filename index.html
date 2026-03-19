@@ -793,6 +793,7 @@
                             const dmarc = {
                                 version: null,
                                 policy: null,
+                                subDomainPolicy: null,
                                 aggregatedReportReceiver: null,
                                 forensicReportReceiver: null,
                                 spfAlignment: "r", // relaxed by default
@@ -822,6 +823,13 @@
                                             dmarc.valid = false;
                                         }
                                         dmarc.policy = value.toLowerCase();
+                                        break;
+                                    case "sp":
+                                        if (dmarc.subDomainPolicy) {
+                                            console.error("multiple DMARC subdomain policies defined");
+                                            dmarc.valid = false;
+                                        }
+                                        dmarc.subDomainPolicy = value.toLowerCase();
                                         break;
                                     case "rua":
                                         if (dmarc.aggregatedReportReceiver) {
@@ -945,6 +953,7 @@
                                         rows: [
                                             ["Version", dmarc.version, ""],
                                             ["Policy", dmarc.policy, policyDescription[dmarc.policy] || ""],
+                                            ["Subdomain Policy", dmarc.subDomainPolicy || "-", dmarc.subDomainPolicy ? policyDescription[dmarc.subDomainPolicy] || "" : ""],
                                             ["Aggregate Report Receiver", dmarc.aggregatedReportReceiver || "-", dmarc.aggregatedReportReceiver ? `${dmarc.aggregatedReportReceiver} will receive aggregate reports` : "No aggregate reports will be sent"],
                                             ["Forensic Report Receiver", dmarc.forensicReportReceiver || "-", dmarc.forensicReportReceiver ? `${dmarc.forensicReportReceiver} will receive forensic reports` : "No forensic reports will be sent"],
                                             ["SPF Alignment", dmarc.spfAlignment, `SPF alignment mode: ${dmarc.spfAlignment === "s" ? "strict" : "relaxed"}`],
