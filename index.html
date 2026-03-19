@@ -576,7 +576,7 @@
                         try {
                             spf = parseSPF(record.value);
                         } catch (error) {
-                            console.error("parseSPF failed:", error)
+                            console.error("parseSPF failed:", error);
                             result.content = [
                                 {
                                     type: "value",
@@ -594,7 +594,7 @@
                                         },
                                     ]
                                 }
-                            ]
+                            ];
                             return result;
                         }
 
@@ -901,7 +901,7 @@
                         try {
                             dmarc = parseDMARC(record.value);
                         } catch (error) {
-                            console.log("parseDMARC failed:", error)
+                            console.log("parseDMARC failed:", error);
                             result.content = [
                                 {
                                     type: "value",
@@ -1043,12 +1043,59 @@
                         };
                     }
 
+                    async function checkNameservers(domain) {
+                        const knownNameservers = [
+                            { pattern: ".*ui-dns.*", name: "IONOS", url: "https://ionos.com" }, // ui-dns.com
+                            { pattern: ".*1and1.*|.*ionos.*", name: "1&1 (IONOS)", url: "https://ionos.com" }, // 1and1.com
+                            { pattern: ".*domaincontrol.*", name: "GoDaddy", url: "https://godaddy.com" }, // ns01.domaincontrol.com
+                            { pattern: ".*azure-dns.*", name: "Azure", url: "https://portal.azure.com" }, // ns1-06.azure-dns.com
+                            { pattern: ".*ns.hetzner.*", name: "Hetzner", url: "https://hetzner.com" }, // hydrogen.ns.hetzner.com
+                            { pattern: ".*ns.cloudflare.*", name: "Cloudflare", url: "https://cloudflare.com" }, // bob.ns.cloudflare.com
+                            { pattern: ".*rzone.*", name: "Strato", url: "https://strato.com" } // docks10.rzone.de
+                        ];
+
+                        const nameserverRecords = (await queryDNS(`${domain}`, "NS"));
+
+                        let content = [];
+                        let i = 1;
+                        for (const record of nameserverRecords) {
+                            const knownNs = knownNameservers.find(ns => new RegExp(ns.pattern, "i").test(record.value));
+                            content.push({
+                                type: "container",
+                                style: "card",
+                                title: `Nameserver #${i++}`,
+                                content: [
+                                    {
+                                        type: "value",
+                                        label: "Nameserver",
+                                        value: record.value,
+                                        valid: true
+                                    },
+                                    {
+                                        type: "text",
+                                        text: knownNs ? `Go to Provider: ${knownNs.name}` : "Unknown provider",
+                                        url: knownNs?.url
+                                    }
+                                ]
+                            });
+                        }
+
+                        return {
+                            type: "container",
+                            style: "card",
+                            title: "Nameservers",
+                            notice: "These are the nameservers currently authoritative for your domain. Use this information in case you need to change any DNS records.",
+                            content
+                        };
+                    }
+
                     const checks /* Promise<node> */ = [
                         await checkMX(domain),
                         await checkSPF(domain),
                         await checkDMARC(domain),
                         await checkDKIM(domain),
-                        await checkMisc(domain)
+                        await checkMisc(domain),
+                        await checkNameservers(domain)
                     ];
 
                     return {
@@ -1127,7 +1174,7 @@
                     value.id = uuid;
                     value.textContent = node.value;
                     value.className = node.valid ? "result-valid" : "result-invalid";
-                    value.style.wordBreak = "break-word"
+                    value.style.wordBreak = "break-word";
                     value.style.overflow = "hidden";
                     value.style.flexGrow = "1";
                     container.appendChild(value);
@@ -1149,7 +1196,7 @@
                         e.preventDefault();
 
                         window.navigator.clipboard.writeText(node.value);
-                    }
+                    };
 
                     return container;
                 }
@@ -1235,6 +1282,25 @@
                     return container;
                 }
 
+                function generateTextNode(node /* { type: "text", text: str, url?: str } */) {
+                    if (node.type !== "text") {
+                        throw new Error(`invalid node type for generateTextNode: ${node.type}`);
+                    }
+
+                    const container = document.createElement("div");
+
+                    const textNode = document.createElement(node.url ? "a" : "span");
+                    textNode.textContent = node.text;
+                    if (node.url) {
+                        textNode.href = node.url;
+                        textNode.target = "_blank";
+                        textNode.rel = "noopener noreferrer";
+                    }
+                    container.appendChild(textNode);
+
+                    return container;
+                }
+
                 function generateContainerNode(node /* { type: "container", title: str|undefined, notice: str|undefined, style: undefined|"none"|"card"| = "none", foldable: undefined|bool = false, open: undefined|bool = false, content: nodes[] /*/) {
                     if (node.type !== "container") {
                         throw new Error(`invalid node type for generateContainerNode: ${node.type}`);
@@ -1297,6 +1363,9 @@
                                     break;
                                 case "table":
                                     childElement = generateTableNode(childNode);
+                                    break;
+                                case "text":
+                                    childElement = generateTextNode(childNode);
                                     break;
                                 default:
                                     throw new Error(`invalid node type: ${childNode.type}`);
@@ -1409,8 +1478,7 @@
                     page.query.start_check.disabled = !valid;
                 }
 
-                function setDomainQueryParam(domain)
-                {
+                function setDomainQueryParam(domain) {
                     const url = new URL(window.location);
                     url.searchParams.set("domain", domain);
                     window.history.pushState({}, "", url.toString());
