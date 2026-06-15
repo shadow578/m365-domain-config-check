@@ -1044,59 +1044,12 @@
                         };
                     }
 
-                    async function checkNameservers(domain) {
-                        const knownNameservers = [
-                            { pattern: ".*ui-dns.*", name: "IONOS", url: "https://ionos.com" }, // ui-dns.com
-                            { pattern: ".*1and1.*|.*ionos.*", name: "1&1 (IONOS)", url: "https://ionos.com" }, // 1and1.com
-                            { pattern: ".*domaincontrol.*", name: "GoDaddy", url: "https://godaddy.com" }, // ns01.domaincontrol.com
-                            { pattern: ".*azure-dns.*", name: "Azure", url: "https://portal.azure.com" }, // ns1-06.azure-dns.com
-                            { pattern: ".*ns.hetzner.*", name: "Hetzner", url: "https://hetzner.com" }, // hydrogen.ns.hetzner.com
-                            { pattern: ".*ns.cloudflare.*", name: "Cloudflare", url: "https://cloudflare.com" }, // bob.ns.cloudflare.com
-                            { pattern: ".*rzone.*", name: "Strato", url: "https://strato.com" } // docks10.rzone.de
-                        ];
-
-                        const nameserverRecords = (await queryDNS(`${domain}`, "NS"));
-
-                        let content = [];
-                        let i = 1;
-                        for (const record of nameserverRecords) {
-                            const knownNs = knownNameservers.find(ns => new RegExp(ns.pattern, "i").test(record.value));
-                            content.push({
-                                type: "container",
-                                style: "card",
-                                title: `Nameserver #${i++}`,
-                                content: [
-                                    {
-                                        type: "value",
-                                        label: "Nameserver",
-                                        value: record.value,
-                                        valid: true
-                                    },
-                                    {
-                                        type: "text",
-                                        text: knownNs ? `Go to Provider: ${knownNs.name}` : "Unknown provider",
-                                        url: knownNs?.url
-                                    }
-                                ]
-                            });
-                        }
-
-                        return {
-                            type: "container",
-                            style: "card",
-                            title: "Nameservers",
-                            notice: "These are the nameservers currently authoritative for your domain. Use this information in case you need to change any DNS records.",
-                            content
-                        };
-                    }
-
                     const checks /* Promise<node> */ = [
                         await checkMX(domain),
                         await checkSPF(domain),
                         await checkDMARC(domain),
                         await checkDKIM(domain),
                         await checkMisc(domain),
-                        await checkNameservers(domain)
                     ];
 
                     return {
@@ -1145,10 +1098,57 @@
                     };
                 }
 
+                async function checkNameservers(domain) {
+                    const knownNameservers = [
+                        { pattern: ".*ui-dns.*", name: "IONOS", url: "https://ionos.com" }, // ui-dns.com
+                        { pattern: ".*1and1.*|.*ionos.*", name: "1&1 (IONOS)", url: "https://ionos.com" }, // 1and1.com
+                        { pattern: ".*domaincontrol.*", name: "GoDaddy", url: "https://godaddy.com" }, // ns01.domaincontrol.com
+                        { pattern: ".*azure-dns.*", name: "Azure", url: "https://portal.azure.com" }, // ns1-06.azure-dns.com
+                        { pattern: ".*ns.hetzner.*", name: "Hetzner", url: "https://hetzner.com" }, // hydrogen.ns.hetzner.com
+                        { pattern: ".*ns.cloudflare.*", name: "Cloudflare", url: "https://cloudflare.com" }, // bob.ns.cloudflare.com
+                        { pattern: ".*rzone.*", name: "Strato", url: "https://strato.com" } // docks10.rzone.de
+                    ];
+
+                    const nameserverRecords = (await queryDNS(`${domain}`, "NS"));
+
+                    let content = [];
+                    let i = 1;
+                    for (const record of nameserverRecords) {
+                        const knownNs = knownNameservers.find(ns => new RegExp(ns.pattern, "i").test(record.value));
+                        content.push({
+                            type: "container",
+                            style: "card",
+                            title: `Nameserver #${i++}`,
+                            content: [
+                                {
+                                    type: "value",
+                                    label: "Nameserver",
+                                    value: record.value,
+                                    valid: true
+                                },
+                                {
+                                    type: "text",
+                                    text: knownNs ? `Go to Provider: ${knownNs.name}` : "Unknown provider",
+                                    url: knownNs?.url
+                                }
+                            ]
+                        });
+                    }
+
+                    return {
+                        type: "container",
+                        style: "card",
+                        title: "Nameservers",
+                        notice: "These are the nameservers currently authoritative for your domain. Use this information in case you need to change any DNS records.",
+                        content
+                    };
+                }
+
                 const checks /* Promise<node> */ = [
                     await checkEntra(domain),
                     await checkExchangeOnline(domain),
-                    await checkIntune(domain)
+                    await checkIntune(domain),
+                    await checkNameservers(domain)
                 ];
 
                 return await Promise.all(checks);
